@@ -1,0 +1,96 @@
+import re
+
+from audio import make_live_sink, NullSink, WavSink
+from dsl import parse_player
+from live import Engine
+
+BANNER = r"""
+  _  _ _   ___  ___  _    ___  _____ ___     _  _
+ | || | | | __|/ __|| |_ | __||_   _| __|   | |/ /
+ | __ | |_| _| \__ \| ' \| _|   | | | _|    |   <
+ |_||_|___|___||___/|_||_|___|  |_| |___|   |_|\_\   ...the hive is humming
+"""
+
+HELP = """
+  hivebeat — a live-coding music synth (v0.1)
+
+  players:
+    p1 >> square("c4 e4 g4 a4", dur=0.25)     melodic: notes + rests (., rest)
+    p1 >> saw("c2 g2 [c3 e3 g3]", dur=1)      chords: [c3 e3 g3]
+    kick >> kick("x . x . x x . .", dur=0.5)  drums: x = hit, . = rest
+    hat >> hat(euclid(3, 8), dur=0.25)        euclidean rhythm: 3 hits / 8 steps
+
+  params:  dur, step, delay, amp  + per-instrument params
+           (fm: ratio, index · saw/square: detune, duty, tau · kick: f0, f1)
+
+  instruments: square  saw  fm  pad  kick  snare  hat
+
+  controls:
+    bpm(128)   change tempo (clock resyncs)
+    p1 >> ...  reassign a player live (swaps at the next cycle)
+    stop/hush  silence everything
+    ?          this help
+    exit/quit  leave (ctrl-c works too)
+"""
+
+
+def main():
+    engine = Engine()
+    try:
+        sink = make_live_sink(engine)
+        sink.start()
+        mode = 'live (pacat → pulseaudio)'
+    except Exception as e:
+        sink = NullSink(engine)
+        sink.start()
+        mode = f'null sink ({e}) — run in a real termux shell for sound, or use render.py'
+    print(BANNER)
+    print(f"  audio backend: {mode}")
+    print("  try:  p1 >> square(\"c4 e4 g4 a4\", dur=0.25)")
+    print("  (stop/exit to leave · ? for help)")
+    try:
+        while True:
+            try:
+                line = input('> ').strip()
+            except EOFError:
+                break
+            if not line:
+                continue
+            low = line.lower()
+            if low in ('?', 'help'):
+                print(HELP)
+                continue
+            if low in ('stop', 'hush'):
+                engine.hush()
+                print('  shhh... hive went quiet (◕‿◕)')
+                continue
+            if low in ('exit', 'quit'):
+                engine.hush()
+                break
+            m = re.match(r'^bpm\s*\(\s*(\d+(?:\.\d+)?)\s*\)$', low)
+            if m:
+                b = float(m.group(1))
+                engine.set_bpm(b)
+                print(f'  bpm -> {b:g} · clock resynced (＾▽＾)')
+                continue
+            if '>>' in line:
+                name, rhs = line.split('>>', 1)
+                name, rhs = name.strip(), rhs.strip()
+                try:
+                    pdef = parse_player(rhs, name)
+                except ValueError as e:
+                    print(f'  (｡•́︿•̀｡) {e}')
+                    continue
+                engine.set_player(name, pdef)
+                print(f'  {name} -> {pdef.describe()} (hive humming...)')
+                continue
+            print("  (｡•́︿•̀｡) huh? try  p1 >> square(\"c4 e4 g4\", dur=0.25)   or   ?")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sink.stop()
+    print('\n  bye bye, hive is asleep (￣ω￣)')
+
+
+if __name__ == '__main__':
+    main()
