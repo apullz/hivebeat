@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 *.wav
 !sample.wav
+!tracks/sabre_demo.wav
+!docs/sabre_demo.wav
