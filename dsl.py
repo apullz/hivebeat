@@ -64,6 +64,42 @@ def _convert(val):
         return val
 
 
+def _split_calls(s):
+    """split a method chain 'instr(a).p1(b).p2(c)' into [('instr','a'),('p1','b')...],
+    keeping balanced parens (so euclid(3,8) inside the first call stays intact)."""
+    calls = []
+    while True:
+        s = s.strip()
+        if not s:
+            break
+        m = re.match(r'([a-z0-9_]+)\s*\(', s)
+        if not m:
+            raise ValueError(f"expected name(...) — got '{s[:24]}'")
+        name = m.group(1)
+        depth = 0
+        j = m.end() - 1
+        n = len(s)
+        while j < n:
+            ch = s[j]
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if depth != 0:
+            raise ValueError('unbalanced parentheses in ' + s[:24])
+        calls.append((name, s[m.end():j]))
+        rest = s[j + 1:].strip()
+        if not rest:
+            break
+        if not rest.startswith('.'):
+            raise ValueError(f"expected .param(value) after ')', got '{rest[:16]}'")
+        s = rest[1:]
+    return calls
+
+
 def _drum_tokens(words):
     return [(None, w not in ('x', 'X')) for w in words]
 
@@ -104,13 +140,7 @@ def _parse_melodic_words(words):
     return out
 
 
-def parse_player(rhs, name):
-    if not _NAME_RE.match(name):
-        raise ValueError(f"'{name}' isn't a valid player name (use p1, bass, kick...)")
-    m = _INSTR_RE.match(rhs)
-    if not m:
-        raise ValueError("expected: instrument(\"c4 e4 g4\", dur=0.25) — got no matching parens")
-    instr_name, argstr = m.group(1).lower(), m.group(2)
+def _build_player(name, instr_name, argstr, kwargs):
     is_drum = instr_name in I.DRUMS
     instrument = I.INSTRUMENTS.get(instr_name)
     if instrument is None:
@@ -118,27 +148,27 @@ def parse_player(rhs, name):
         raise ValueError(f"unknown instrument '{instr_name}' — have: {have}")
 
     tokens = None
+    kw_start = 0
     mq = re.search(r'"([^"]*)"', argstr)
     if mq:
         words = mq.group(1).split()
         tokens = _drum_tokens(words) if is_drum else _parse_melodic_words(words)
+        kw_start = mq.end()
     else:
         me = re.search(r'^\s*euclid\(\s*(\d+)\s*,\s*(\d+)\s*\)', argstr)
         if me:
             hits, steps = int(me.group(1)), int(me.group(2))
             tokens = _drum_tokens(euclid(steps, hits))
+            kw_start = me.end()
         elif not is_drum and ',' not in argstr:
             words = argstr.split()
             if words:
                 tokens = _parse_melodic_words(words)
+                kw_start = len(argstr)
     if tokens is None:
-        raise ValueError("i need a pattern string: instrument(\"c4 e4 g4\", dur=0.25)")
+        raise ValueError('i need a pattern string: square("c4 e4 g4", dur=0.25)')
 
-    kw = argstr[mq.end():] if mq else argstr
-    if mq is None and re.search(r'^\s*euclid\(', argstr):
-        kw = kw[re.search(r'^\s*euclid\(', argstr).end():]
-    kwargs = {}
-    for mm in _ARG_RE.finditer(kw):
+    for mm in _ARG_RE.finditer(argstr[kw_start:]):
         kwargs[mm.group(1)] = _convert(mm.group(2))
 
     step = kwargs.get('step', 0.5 if is_drum else 1.0)
@@ -149,3 +179,43 @@ def parse_player(rhs, name):
 
     return PlayerDef(name, instr_name, instrument, tokens, dur, step, delay,
                      amp, params, is_drum)
+
+
+def parse_player(rhs, name):
+    if not _NAME_RE.match(name):
+        raise ValueError(f"'{name}' isn't a valid player name (use p1, bass, kick...)")
+    m = _INSTR_RE.match(rhs)
+    if not m:
+        raise ValueError("expected: instrument(\"c4 e4 g4\", dur=0.25) — got no matching parens")
+    instr_name = m.group(1).lower()
+    return _build_player(name, instr_name, m.group(2), {})
+
+
+def parse_chain(rhs, name):
+    """method-chain form:  p1.square("c4 e4 g4").dur(0.25).amp(0.8)"""
+    if not _NAME_RE.match(name):
+        raise ValueError(f"'{name}' isn't a valid player name (use p1, bass, kick...)")
+    calls = _split_calls(rhs)
+    if not calls:
+        raise ValueError('expected  p1.square("c4 e4 g4").dur(0.25)')
+    instr_name = calls[0][0].lower()
+    kwargs = {}
+    for pn, pv in calls[1:]:
+        kwargs[pn] = _convert(pv)
+    return _build_player(name, instr_name, calls[0][1], kwargs)
+
+
+def parse_line(line):
+    """accept either syntax:
+        p1.square("c4 e4 g4").dur(0.25)          (method chain)
+        p1 >> square("c4 e4 g4", dur=0.25)       (legacy foxdot form)
+    """
+    line = line.strip()
+    m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(>>|\.)', line)
+    if not m:
+        raise ValueError('expected  p1.square("c4 e4 g4").dur(0.25)   or   p1 >> square("c4 e4 g4", dur=0.25)')
+    name = m.group(1)
+    rest = line[m.end():]
+    if m.group(2) == '>>':
+        return parse_player(rest, name)
+    return parse_chain(rest, name)

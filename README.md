@@ -40,39 +40,41 @@ live audio works from real termux *and* from inside proot. hivebeat streams into
 ### offline (works anywhere with python + numpy)
 
 ```
-python3 render.py out.wav 8 "p1 >> square(\"c4 e4 g4 a4\", dur=0.25)"
-./play.sh out.wav 8 "drums >> kick(euclid(3,8), dur=0.25)" "p1 >> saw(\"c2 g2\", dur=1)"
+python3 render.py out.wav 8 'p1.square("c4 e4 g4 a4").dur(0.25)'
+./play.sh out.wav 8 'drums.kick(euclid(3,8)).dur(0.25)' 'p1.saw("c2 g2").dur(1)'
 ```
 
 ---
 
 ## tutorial — the hive language
 
-every player is a **looping pattern**. the syntax is always:
+every player is a **looping pattern**. the syntax is a method chain — `name` first, then the instrument, then any params:
 
 ```
-name >> instrument("token token token", param=value, ...)
+name.instrument("token token token").param(value).param(value)
 ```
+
+(and the older `name >> instrument("...", param=value)` form still works too)
 
 ### 1. your first notes
 
 ```
-p1 >> square("c4 e4 g4 a4", dur=0.25)
+p1.square("c4 e4 g4 a4").dur(0.25)
 ```
 
 - `p1` is just a name — any identifier works (`lead`, `bass`, `x`, ...).
 - `square` is the instrument.
 - the string is the **pattern**: space-separated tokens, each token = one note.
-- `dur` = how long each note lasts, in beats. `dur=0.25` = sixteenth notes.
-- the pattern loops forever. re-type `p1 >> ...` with anything and it swaps in on the next cycle.
+- `dur` = how long each note lasts, in beats. `dur(0.25)` = sixteenth notes.
+- the pattern loops forever. re-type `p1.square(...)` with anything and it swaps in on the next cycle.
 
 ### 2. notes, octaves, accidentals, rests
 
 ```
-p1 >> square("c4 e4 g4 a4 g4 e4 c4", dur=0.5)   # note + octave
-p2 >> saw("c#4 d#4 f#4 g#4", dur=0.5)           # sharps and flats: # or b
-p3 >> saw("e2 a2 d3 g3", dur=1)                 # octaves move the pitch register
-p1 >> square("c4 . e4 rest g4 _", dur=0.5)      # rests: .  rest  r  _
+p1.square("c4 e4 g4 a4 g4 e4 c4").dur(0.5)   # note + octave
+p2.saw("c#4 d#4 f#4 g#4").dur(0.5)           # sharps and flats: # or b
+p3.saw("e2 a2 d3 g3").dur(1)                 # octaves move the pitch register
+p1.square("c4 . e4 rest g4 _").dur(0.5)      # rests: .  rest  r  _
 ```
 
 - bare `e` (no octave) defaults to octave 4.
@@ -81,10 +83,10 @@ p1 >> square("c4 . e4 rest g4 _", dur=0.5)      # rests: .  rest  r  _
 ### 3. timing: `dur`, `step`, `delay`, `amp`
 
 ```
-p1 >> square("c4 e4 g4", dur=1)        # each note 1 beat (legato)
-p1 >> square("c4 e4 g4", dur=0.5, step=1)  # note is half a beat, then 0.5 beat of silence
-bass >> saw("c2 g2", dur=1, delay=1)   # shift the whole pattern by 1 beat (call & response!)
-hat >> hat("x x x x", dur=0.25, amp=0.6)  # quieter
+p1.square("c4 e4 g4").dur(1)                 # each note 1 beat (legato)
+p1.square("c4 e4 g4").dur(0.5).step(1)       # note is half a beat, then 0.5 beat of silence
+bass.saw("c2 g2").dur(1).delay(1)            # shift the whole pattern by 1 beat (call & response!)
+hat.hat("x x x x").dur(0.25).amp(0.6)        # quieter
 ```
 
 - `dur` — note length in beats (can also be a list, see below).
@@ -95,8 +97,8 @@ hat >> hat("x x x x", dur=0.25, amp=0.6)  # quieter
 ### 4. cycling lists — make patterns *move*
 
 ```
-p1 >> square("c4 e4 g4 a4", dur=[0.25, 0.25, 0.5])   # durations cycle: 0.25 0.25 0.5 0.25 0.25 0.5 ...
-bass >> saw("c2 g2 a1 e2", dur=[1, 0.5], amp=[0.9, 0.5])   # lists cycle independently
+p1.square("c4 e4 g4 a4").dur([0.25, 0.25, 0.5])   # durations cycle: 0.25 0.25 0.5 0.25 0.25 0.5 ...
+bass.saw("c2 g2 a1 e2").dur([1, 0.5]).amp([0.9, 0.5])   # lists cycle independently
 ```
 
 any of `dur`, `step`, `amp` can be a list — it repeats round-robin forever. this is the cheapest way to make a pattern breathe.
@@ -104,7 +106,7 @@ any of `dur`, `step`, `amp` can be a list — it repeats round-robin forever. th
 ### 5. chords
 
 ```
-p1 >> fm("[c4 e4 g4] [d4 f4 a4] [a3 c4 e4] [g3 b3 d4]", dur=0.5)
+p1.fm("[c4 e4 g4] [d4 f4 a4] [a3 c4 e4] [g3 b3 d4]").dur(0.5)
 ```
 
 brackets `[ ]` group notes into one chord event — all played at once. a chord is one token and eats one `dur` slot.
@@ -112,19 +114,19 @@ brackets `[ ]` group notes into one chord event — all played at once. a chord 
 ### 6. drums
 
 ```
-drums >> kick("x . x . x x . .", dur=0.5)     # x = hit, everything else = rest
-snare >> snare(".. x .. x", dur=0.5)
-hat   >> hat("x x x x x x x x", dur=0.25)
+drums.kick("x . x . x x . .").dur(0.5)     # x = hit, everything else = rest
+snare.snare(".. x .. x").dur(0.5)
+hat.hat("x x x x x x x x").dur(0.25)
 ```
 
-drum instruments are `kick`, `snare`, `hat`. the pattern is `x` (hit) or `.` (rest). the instrument name is the *sound*; the player name is whatever you want (yes, `drums >> kick(...)` is the normal shape).
+drum instruments are `kick`, `snare`, `hat`. the pattern is `x` (hit) or `.` (rest). the instrument name is the *sound*; the player name is whatever you want (yes, `drums.kick(...)` is the normal shape).
 
 ### 7. euclidean rhythms — instant grooves
 
 ```
-drums >> kick(euclid(3, 8), dur=0.25)   # 3 hits spread as evenly as possible over 8 steps
-hat   >> hat(euclid(5, 8), dur=0.125)
-snare >> snare(euclid(3, 4), dur=0.5)
+drums.kick(euclid(3, 8)).dur(0.25)   # 3 hits spread as evenly as possible over 8 steps
+hat.hat(euclid(5, 8)).dur(0.125)
+snare.snare(euclid(3, 4)).dur(0.5)
 ```
 
 `euclid(hits, steps)` returns a rhythm — bjorklund's algorithm. swap the numbers and the groove breathes differently. classics:
@@ -150,9 +152,9 @@ snare >> snare(euclid(3, 4), dur=0.5)
 | `hat` | highpassed noise | `gain=0.4` |
 
 ```
-p1 >> fm("c4 e4 g4", ratio=3, index=2, tau=0.8)    # softer, wobblier bell
-p1 >> square("c4 e4 g4", duty=0.25)                 # thin, bright pulse
-p1 >> pad("c3 [e3 g3]", dur=4, attack=0.3)          # slow evolving wash
+p1.fm("c4 e4 g4").ratio(3).index(2).tau(0.8)    # softer, wobblier bell
+p1.square("c4 e4 g4").duty(0.25)                 # thin, bright pulse
+p1.pad("c3 [e3 g3]").dur(4).attack(0.3)          # slow evolving wash
 ```
 
 ### 9. live controls
@@ -164,15 +166,15 @@ stop                  # (or hush) — silence everything, keep the repl alive
 exit / quit / ctrl-c  # leave
 ```
 
-re-typing any `name >> ...` replaces that player on the next cycle boundary — the key live-coding move. build up one layer at a time, then morph them:
+re-typing any `name.instrument(...)` replaces that player on the next cycle boundary — the key live-coding move. build up one layer at a time, then morph them:
 
 ```
-drums >> kick(euclid(3,8), dur=0.25)
-hat >> hat(euclid(5,8), dur=0.125)
-bass >> saw("c2 g2 a1 e2", dur=0.5)
+drums.kick(euclid(3,8)).dur(0.25)
+hat.hat(euclid(5,8)).dur(0.125)
+bass.saw("c2 g2 a1 e2").dur(0.5)
 bpm(140)
-bass >> saw("c2 g2 c3 a1", dur=[0.5,0.5,1])
-lead >> fm("[c4 e4 g4] [d4 f4 a4]", dur=0.5)
+bass.saw("c2 g2 c3 a1").dur([0.5,0.5,1])
+lead.fm("[c4 e4 g4] [d4 f4 a4]").dur(0.5)
 stop
 ```
 
@@ -181,12 +183,13 @@ stop
 ## command reference (the whole language)
 
 ```
-name >> instrument("pattern", params...)   define/replace a looping player
+name.instrument("pattern").param(value).param(value)   define/replace a looping player
   instrument:  square | saw | fm | pad | kick | snare | hat
   pattern:     notes (c4, e, g#3, bb2) · rests (. rest r _) · chords ([c4 e4 g4])
                drums use x (hit) / . (rest) · euclid(hits, steps) for drum patterns
   params:      dur (number|list) · step (number|list) · delay (number) · amp (number|list)
                + per-instrument knobs from the table above
+               (legacy form:  name >> instrument("pattern", param=value)  also works)
 
 bpm(number)      set tempo
 stop | hush      silence all players

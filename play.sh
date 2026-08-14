@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # render some music to wav and try to play it on this android box.
-# usage: ./play.sh out.wav 6 "p1 >> square(\"c4 e4 g4\", dur=0.25)" "drums >> kick(euclid(3,8), dur=0.25)"
+# usage: ./play.sh out.wav 6 'p1.square("c4 e4 g4").dur(0.25)' 'drums.kick(euclid(3,8)).dur(0.25)'
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="$1"; SECS="$2"; shift 2

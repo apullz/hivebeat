@@ -3,7 +3,7 @@ import re
 import readline
 
 from audio import make_live_sink, NullSink, WavSink
-from dsl import parse_player
+from dsl import parse_line
 from live import Engine
 
 HIST_FILE = os.path.join(os.path.expanduser('~'), '.hivebeat_history')
@@ -35,20 +35,20 @@ BANNER = r"""
 HELP = """
   hivebeat — a live-coding music synth (v0.1)
 
-  players:
-    p1 >> square("c4 e4 g4 a4", dur=0.25)     melodic: notes + rests (., rest)
-    p1 >> saw("c2 g2 [c3 e3 g3]", dur=1)      chords: [c3 e3 g3]
-    kick >> kick("x . x . x x . .", dur=0.5)  drums: x = hit, . = rest
-    hat >> hat(euclid(3, 8), dur=0.25)        euclidean rhythm: 3 hits / 8 steps
+  players (method-chain syntax; the old p1 >> square(...) also still works):
+    p1.square("c4 e4 g4 a4").dur(0.25)     melodic: notes + rests (., rest)
+    p1.saw("c2 g2 [c3 e3 g3]").dur(1)      chords: [c3 e3 g3]
+    kick.kick("x . x . x x . .").dur(0.5)  drums: x = hit, . = rest
+    hat.hat(euclid(3, 8)).dur(0.25)        euclidean rhythm: 3 hits / 8 steps
 
-  params:  dur, step, delay, amp  + per-instrument params
-           (fm: ratio, index · saw/square: detune, duty, tau · kick: f0, f1)
+  chain any params:  .dur() .step() .delay() .amp() + per-instrument
+    (fm: ratio, index · saw/square: detune, duty, tau · kick: f0, f1)
 
   instruments: square  saw  fm  pad  kick  snare  hat
 
   controls:
     bpm(128)   change tempo (clock resyncs)
-    p1 >> ...  reassign a player live (swaps at the next cycle)
+    p1.xxx...  reassign a player live (swaps at the next cycle)
     stop/hush  silence everything
     ?          this help
     exit/quit  leave (ctrl-c works too)
@@ -68,7 +68,7 @@ def main():
     setup_history()
     print(BANNER)
     print(f"  audio backend: {mode}")
-    print("  try:  p1 >> square(\"c4 e4 g4 a4\", dur=0.25)")
+    print('  try:  p1.square("c4 e4 g4 a4").dur(0.25)')
     print("  (stop/exit to leave · ? for help)")
     try:
         while True:
@@ -95,19 +95,16 @@ def main():
                 engine.set_bpm(b)
                 print(f'  bpm -> {b:g} · clock resynced (＾▽＾)')
                 continue
-            if '>>' in line:
-                name, rhs = line.split('>>', 1)
-                name, rhs = name.strip(), rhs.strip()
-                try:
-                    pdef = parse_player(rhs, name)
-                except ValueError as e:
-                    print(f'  (｡•́︿•̀｡) {e}')
-                    continue
-                engine.set_player(name, pdef)
-                readline.add_history(line)
-                print(f'  {name} -> {pdef.describe()} (hive humming...)')
+            try:
+                pdef = parse_line(line)
+            except ValueError as e:
+                print(f"  (｡•́︿•̀｡) {e}")
                 continue
-            print("  (｡•́︿•̀｡) huh? try  p1 >> square(\"c4 e4 g4\", dur=0.25)   or   ?")
+            engine.set_player(pdef.name, pdef)
+            readline.add_history(line)
+            print(f'  {pdef.name} -> {pdef.describe()} (hive humming...)')
+            continue
+            print("  (｡•́︿•̀｡) huh? try  p1.square(\"c4 e4 g4\").dur(0.25)   or   ?")
     except KeyboardInterrupt:
         pass
     finally:
