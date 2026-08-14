@@ -68,9 +68,10 @@ def snare(freq, t, dur, amp, p):
     rng = np.random.default_rng()
     noise = rng.standard_normal(len(t))
     w = max(int(0.0004 * SR), 3)
-    kern = np.ones(w) / w
-    lp = np.convolve(noise, kern, mode='same')
-    noise = noise - lp
+    if len(t) > w:
+        kern = np.ones(w) / w
+        lp = np.convolve(noise, kern, mode='same')
+        noise = noise - lp
     tone = np.sin(2 * np.pi * 185.0 * t)
     y = 0.7 * noise + 0.5 * tone
     y *= np.exp(-t / max(dur * 0.3, 0.03))
@@ -82,9 +83,10 @@ def hat(freq, t, dur, amp, p):
     rng = np.random.default_rng()
     noise = rng.standard_normal(len(t))
     w = max(int(0.0003 * SR), 3)
-    kern = np.ones(w) / w
-    lp = np.convolve(noise, kern, mode='same')
-    noise = noise - lp
+    if len(t) > w:
+        kern = np.ones(w) / w
+        lp = np.convolve(noise, kern, mode='same')
+        noise = noise - lp
     y = noise * np.exp(-t / max(dur * 0.25, 0.02))
     end = np.clip((dur - t) / 0.008, 0.0, 1.0)
     return y * amp * end * float(p.get('gain', 0.4))

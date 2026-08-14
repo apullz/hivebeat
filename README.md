@@ -14,6 +14,22 @@ a live-coding music synth that runs in a terminal. you type a pattern, it loops 
 
 ---
 
+## demo — hear it (◕‿◕)
+
+[![play](https://img.shields.io/badge/▶_play_embedded_player-hivebeat--demo-3dff88?style=for-the-badge)](https://apullz.github.io/hivebeat/)
+
+a full sabrepulse-style 8-bit chiptune, **rendered by hivebeat's own engine** — 170 bpm, euclidean drums, arp leads, build → drop → breakdown → final drop:
+
+- ▶ [**embedded player** (with section-highlighting timeline)](https://apullz.github.io/hivebeat/)
+- [🎵 sabre_demo.wav](tracks/sabre_demo.wav) — 39s, 22050hz mono, 1.7 MB
+- [source: track.py](track.py) — the whole track is just hivebeat DSL lines
+
+```
+python3 track.py   # regenerate tracks/sabre_demo.wav in one shot
+```
+
+---
+
 ## quickstart
 
 ### live
