@@ -1,8 +1,27 @@
+import os
 import re
+import readline
 
 from audio import make_live_sink, NullSink, WavSink
 from dsl import parse_player
 from live import Engine
+
+HIST_FILE = os.path.join(os.path.expanduser('~'), '.hivebeat_history')
+
+
+def setup_history():
+    try:
+        readline.read_history_file(HIST_FILE)
+    except (OSError, IOError):
+        pass
+    readline.set_history_length(200)
+
+
+def save_history():
+    try:
+        readline.write_history_file(HIST_FILE)
+    except (OSError, IOError):
+        pass
 
 BANNER = r"""
  _     _           _                _
@@ -46,6 +65,7 @@ def main():
         sink = NullSink(engine)
         sink.start()
         mode = f'null sink ({e}) — run in a real termux shell for sound, or use render.py'
+    setup_history()
     print(BANNER)
     print(f"  audio backend: {mode}")
     print("  try:  p1 >> square(\"c4 e4 g4 a4\", dur=0.25)")
@@ -84,6 +104,7 @@ def main():
                     print(f'  (｡•́︿•̀｡) {e}')
                     continue
                 engine.set_player(name, pdef)
+                readline.add_history(line)
                 print(f'  {name} -> {pdef.describe()} (hive humming...)')
                 continue
             print("  (｡•́︿•̀｡) huh? try  p1 >> square(\"c4 e4 g4\", dur=0.25)   or   ?")
@@ -91,6 +112,7 @@ def main():
         pass
     finally:
         sink.stop()
+        save_history()
     print('\n  bye bye, hive is asleep (￣ω￣)')
 
 
