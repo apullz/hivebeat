@@ -51,6 +51,19 @@ def _to_stereo_bytes(mono):
     return (data * 32767.0).astype(np.int16).tobytes()
 
 
+def ssh_hivepipe():
+    """run hivepipe on the real termux side over ssh: proot↔pulse sockets are
+    dead (SCM_CREDENTIALS + broken TCP module), but a termux-side client works.
+    env: HIVEBEAT_TERMUX_HOST / _PORT / _KEY"""
+    host = os.environ.get('HIVEBEAT_TERMUX_HOST', 'u0_a248@127.0.0.1')
+    port = os.environ.get('HIVEBEAT_TERMUX_PORT', '8022')
+    key = os.environ.get('HIVEBEAT_TERMUX_KEY',
+                         '/data/data/com.termux/files/home/.ssh/id_ed25519')
+    return ['ssh', '-p', port, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5',
+            '-o', 'IdentitiesOnly=yes', '-i', key, host,
+            '/data/data/com.termux/files/usr/bin/hivepipe']
+
+
 class PacatSink:
     """live audio: stream s16le into hivepipe (bundled pulse-simple player),
     falling back to pacat. both talk to the termux pulseaudio daemon."""
@@ -63,6 +76,17 @@ class PacatSink:
         self.running = False
 
     def start(self):
+        # preferred: hivepipe running on the real termux side via ssh — the
+        # only path that survives proot (see ssh_hivepipe docstring).
+        ssh_cmd = ssh_hivepipe()
+        ssh_proc = self._probe(ssh_cmd, {})
+        if ssh_proc:
+            self.proc = ssh_proc
+            self.running = True
+            self.label = 'hivepipe (termux via ssh)'
+            self.thread = threading.Thread(target=self._loop, daemon=True)
+            self.thread.start()
+            return
         hp = hivepipe()
         if hp:
             cmd = [hp]
@@ -75,8 +99,8 @@ class PacatSink:
                    f'--rate={self.engine.sr}', '--channels=2', '--latency-msec=120']
             env = os.environ.copy()
             label = 'pacat'
-        # prefer the TCP bridge (works from proot AND real termux); fall back
-        # to the unix socket for plain termux setups.
+        # prefer the TCP bridge (works from real termux); fall back to the
+        # unix socket for plain termux setups.
         if _tcp_bridge_ok():
             env['PULSE_SERVER'] = TCP_BRIDGE
         else:
@@ -98,8 +122,25 @@ class PacatSink:
                 hint = f'set PULSE_SERVER={sock} and start the daemon: pulseaudio --start --exit-idle-time=-1' if sock else 'start the daemon: pulseaudio --start --exit-idle-time=-1'
             raise RuntimeError(f'pulseaudio not reachable — {hint}')
         self.running = True
+        self.label = label
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
+
+    @staticmethod
+    def _spawn(cmd, env):
+        return subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, env=env)
+
+    def _probe(self, cmd, env):
+        try:
+            p = self._spawn(cmd, env)
+        except FileNotFoundError:
+            return False
+        time.sleep(0.8)
+        if p.poll() is not None:
+            return False
+        return p
 
     def _loop(self):
         interval = self.block / self.engine.sr

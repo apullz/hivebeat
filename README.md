@@ -23,19 +23,15 @@ bash setup_termux.sh        # pkg install python python-numpy pulseaudio; starts
 ./hivebeat                  # the live repl — start typing patterns
 ```
 
-live audio works from real termux *and* from inside proot. hivebeat streams into a bundled pulse-simple player (`hivepipe`, compiled with termux clang) over the pulseaudio daemon — preferring a loopback TCP bridge, because proot can't pass the `SCM_CREDENTIALS` that pulse's unix-socket handshake needs. the setup script and the optional runit service both load the bridge automatically.
+live audio works from real termux *and* from inside proot. the repl streams PCM to a bundled pulse-simple player (`hivepipe`) over **ssh into the real termux side** — proot↔pulse sockets are cursed (SCM_CREDENTIALS never survive the proot boundary, and termux's TCP module never greets), but a natively-running client works every time. `setup_termux.sh` installs `hivepipe` into termux and makes sure sshd is up; the runit `pulseaudio` service keeps the daemon alive.
 
-> **if it's silent** (backend falls back to `null sink`): the daemon or the bridge is down. fix it on the termux side:
+> **if it's silent** (backend falls back to `null sink`): check the daemon and sshd on the termux side:
 > ```
-> pkill -9 -x pulseaudio
-> rm -rf $PREFIX/tmp/pulse-*
-> setsid pulseaudio --start --exit-idle-time=-1
-> pactl load-module module-native-protocol-tcp auth-anonymous=1 listen=127.0.0.1 port=4713
+> sv status sshd
+> sv restart $PREFIX/var/service/pulseaudio   # or: sv start $PREFIX/var/service/pulseaudio
+> pkill -9 -x pulseaudio && sv start $PREFIX/var/service/pulseaudio   # nuke stray daemons
 > ```
-> or, if you set up the runit service (recommended):
-> ```
-> sv restart $PREFIX/var/service/pulseaudio
-> ```
+> the repl tries ssh → TCP bridge → unix socket in order, so a healthy daemon + sshd is all it needs.
 
 ### offline (works anywhere with python + numpy)
 
@@ -210,7 +206,7 @@ python3 render.py out.wav SECONDS "player line" ["player line" ...]
 
 | module | job |
 |---|---|
-| `audio.py` | sinks — `PacatSink` (live → `hivepipe`/pacat → termux pulseaudio over TCP bridge), `WavSink` (offline), `NullSink` (realtime silent clock) |
+| `audio.py` | sinks — `PacatSink` (live → `hivepipe` on real termux over ssh, with TCP/unix fallbacks), `WavSink` (offline), `NullSink` (realtime silent clock) |
 | `live.py` | `Engine` — sample-accurate cycle scheduler + tanh limiter. players swap at cycle boundaries |
 | `dsl.py` | the parser — patterns, chords, euclid, cycling params → `PlayerDef` |
 | `instruments.py` | stateless numpy synths (envelope + oscillator, nothing stateful → glitch-free by construction) |
@@ -226,7 +222,7 @@ they all need the scsynth server, which doesn't run on termux/android. so hivebe
 
 - mono synthesis (stereo only at the sink)
 - no custom envelopes yet, no MIDI, no recording of live sessions
-- live audio works from proot too — hivepipe talks to the termux pulseaudio daemon over the loopback TCP bridge (unix sockets break under proot: SCM_CREDENTIALS never arrive)
+- live audio works from proot via ssh-pipe: the repl streams PCM to `hivepipe` running natively on the termux side (proot↔pulse sockets die on SCM_CREDENTIALS, so nothing beats a real termux client)
 
 ## development
 

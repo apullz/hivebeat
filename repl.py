@@ -60,7 +60,7 @@ def main():
     try:
         sink = make_live_sink(engine)
         sink.start()
-        mode = 'live (hivepipe → pulseaudio)'
+        mode = f'live ({getattr(sink, "label", "hivepipe")})'
     except Exception as e:
         sink = NullSink(engine)
         sink.start()
