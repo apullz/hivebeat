@@ -3,10 +3,12 @@
 a live-coding music synth that runs in a terminal. you type a pattern, it loops forever, you edit it while it plays, and the changes land on the next cycle — no glitches. square/saw/fm/pad melodies, euclidean drum grooves, chiptune to ambient — all from a tiny language of our own.
 
 ```
-  _  _ _   ___  ___  _    ___  _____ ___     _  _
- | || | | | __|/ __|| |_ | __||_   _| __|   | |/ /
- | __ | |_| _| \__ \| ' \| _|   | | | _|    |   <
- |_||_|___|___||___/|_||_|___|  |_| |___|   |_|\_\   ...the hive is humming
+ _     _           _                _
+| |__ (_)_   _____| |__   ___  __ _| |_
+| '_ \| \ \ / / _ \ '_ \ / _ \/ _` | __|
+| | | | |\ V /  __/ |_) |  __/ (_| | |_
+|_| |_|_| \_/ \___|_.__/ \___|\__,_|\__|
+              ...the hive is humming
 ```
 
 - **live**: run it in a real termux shell and hear it through your phone.
