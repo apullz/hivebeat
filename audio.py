@@ -1,4 +1,6 @@
+import glob
 import os
+import socket as _socket
 import subprocess
 import threading
 import time
@@ -6,11 +8,42 @@ import time
 import numpy as np
 
 TERMUX_PREFIX = '/data/data/com.termux/files/usr'
+TCP_BRIDGE = 'tcp:127.0.0.1:4713'
 
 
 def termux_pacat():
     p = os.path.join(TERMUX_PREFIX, 'bin/pacat')
     return p if os.path.exists(p) else 'pacat'
+
+
+def hivepipe():
+    """bundled pulse-simple player (compiled with termux clang)."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hivepipe')
+    return p if os.path.exists(p) else None
+
+
+def _find_pulse_socket():
+    candidates = [
+        os.path.join(TERMUX_PREFIX, 'var/run/pulse/native'),
+        os.path.join(TERMUX_PREFIX, 'tmp/pulse-*/native'),
+    ]
+    for pat in candidates:
+        for m in sorted(glob.glob(pat)):
+            if os.path.exists(m):
+                return m
+    return None
+
+
+def _tcp_bridge_ok():
+    """the proot↔pulse boundary breaks on unix-socket SCM_CREDENTIALS, so
+    we prefer the loopback TCP bridge (auth-anonymous, loaded by the
+    pulseaudio service / setup_termux.sh)."""
+    try:
+        s = _socket.create_connection(('127.0.0.1', 4713), timeout=0.4)
+        s.close()
+        return True
+    except OSError:
+        return False
 
 
 def _to_stereo_bytes(mono):
@@ -19,7 +52,8 @@ def _to_stereo_bytes(mono):
 
 
 class PacatSink:
-    """live audio: stream s16le straight into pacat (termux pulseaudio)."""
+    """live audio: stream s16le into hivepipe (bundled pulse-simple player),
+    falling back to pacat. both talk to the termux pulseaudio daemon."""
 
     def __init__(self, engine, block=512):
         self.engine = engine
@@ -29,17 +63,40 @@ class PacatSink:
         self.running = False
 
     def start(self):
-        cmd = [termux_pacat(), '--playback', '--raw', '--format=s16le',
-               f'--rate={self.engine.sr}', '--channels=2', '--latency-msec=120']
+        hp = hivepipe()
+        if hp:
+            cmd = [hp]
+            env = os.environ.copy()
+            env['HIVEPIPE_RATE'] = str(self.engine.sr)
+            env['HIVEPIPE_CH'] = '2'
+            label = 'hivepipe'
+        else:
+            cmd = [termux_pacat(), '--playback', '--raw', '--format=s16le',
+                   f'--rate={self.engine.sr}', '--channels=2', '--latency-msec=120']
+            env = os.environ.copy()
+            label = 'pacat'
+        # prefer the TCP bridge (works from proot AND real termux); fall back
+        # to the unix socket for plain termux setups.
+        if _tcp_bridge_ok():
+            env['PULSE_SERVER'] = TCP_BRIDGE
+        else:
+            sock = _find_pulse_socket()
+            if sock:
+                env['PULSE_SERVER'] = sock
         try:
             self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                          stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL)
+                                         stderr=subprocess.DEVNULL, env=env)
         except FileNotFoundError:
-            raise RuntimeError('pacat not found — run `pkg install pulseaudio` in termux')
-        time.sleep(0.4)
+            raise RuntimeError(f'{label} not found — run `pkg install pulseaudio` in termux')
+        time.sleep(0.6)
         if self.proc.poll() is not None:
-            raise RuntimeError('pulseaudio not reachable — in a real termux shell run: pulseaudio --start --exit-idle-time=-1')
+            if env.get('PULSE_SERVER') == TCP_BRIDGE:
+                hint = 'load the bridge: pactl load-module module-native-protocol-tcp auth-anonymous=1 listen=127.0.0.1 port=4713'
+            else:
+                sock = env.get('PULSE_SERVER')
+                hint = f'set PULSE_SERVER={sock} and start the daemon: pulseaudio --start --exit-idle-time=-1' if sock else 'start the daemon: pulseaudio --start --exit-idle-time=-1'
+            raise RuntimeError(f'pulseaudio not reachable — {hint}')
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()

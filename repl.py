@@ -39,7 +39,7 @@ def main():
     try:
         sink = make_live_sink(engine)
         sink.start()
-        mode = 'live (pacat → pulseaudio)'
+        mode = 'live (hivepipe → pulseaudio)'
     except Exception as e:
         sink = NullSink(engine)
         sink.start()
