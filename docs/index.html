@@ -46,7 +46,6 @@
   }
   audio{
     width:100%; height:44px; display:block;
-    filter:sepia(1) hue-rotate(120deg) saturate(3);
   }
   .meta{
     display:flex; justify-content:space-between; gap:12px;
@@ -102,10 +101,16 @@
 
 <div class="deck">
   <h2>&#9835; press play</h2>
-  <audio id="player" controls preload="auto" src="sabre_demo.wav"></audio>
+  <audio id="player" controls preload="none">
+    <source src="sabre_demo.mp3" type="audio/mpeg">
+    <source src="sabre_demo.ogg" type="audio/ogg">
+    <source src="sabre_demo.wav" type="audio/wav">
+    your browser doesn't support html5 audio — grab
+    <a href="sabre_demo.wav">sabre_demo.wav</a> instead.
+  </audio>
   <div class="meta">
     <span>bpm <b>170</b> · sample rate <b>22050</b> · mono</span>
-    <span>length <b>0:39</b> · size <b>1.7 MB</b></span>
+    <span>length <b>0:39</b> · mp3 <b>0.6 MB</b> · wav 1.7 MB</span>
   </div>
   <div class="timeline" id="timeline">
     <div class="seg" id="t-intro" title="intro (0:00-0:03)"></div>

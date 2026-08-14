@@ -4,3 +4,7 @@ __pycache__/
 !sample.wav
 !tracks/sabre_demo.wav
 !docs/sabre_demo.wav
+!tracks/sabre_demo.mp3
+!tracks/sabre_demo.ogg
+!docs/sabre_demo.mp3
+!docs/sabre_demo.ogg
